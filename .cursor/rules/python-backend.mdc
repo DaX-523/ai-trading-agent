@@ -1,0 +1,15 @@
+---
+description: Python backend conventions for the trading agent server and worker.
+globs: "*.py"
+alwaysApply: false
+---
+
+This backend is native Python.
+
+- Use FastAPI + uvicorn for the HTTP server (`server.py`).
+- Use the asyncio worker (`worker.py`) for the agent loop and price tracker.
+- Load env with `python-dotenv` from `.env`. Required keys: `OPENROUTER_API_KEY`, `DATABASE_URL`.
+- Map SQLAlchemy models onto the existing quoted mixed-case Postgres tables exactly. Never call `Base.metadata.create_all()` against a populated database.
+- Use the official `lighter` Python SDK (`lighter-sdk`) for signing and REST. `base_amount` and `price` must be ints.
+- Preserve the agent LONG/SHORT flip and the single-shot tool loop unless explicitly asked to change them.
+- Use `python -m unittest` for tests.
