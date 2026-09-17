@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getModelColor } from '../lib/modelColor';
 
 type Invocation = {
   id: string;
@@ -12,28 +13,12 @@ type Props = {
   data: Invocation[] | null;
 };
 
-// Generate a color based on model name
-const getModelColor = (modelName: string) => {
-  const lowerName = modelName.toLowerCase();
-
-  if (lowerName.includes('claude')) {
-    return '#ff6b35';  // claude - orange
-  } else if (lowerName.includes('deepseek')) {
-    return '#4d6bfe';  // deepseek - blue
-  } else if (lowerName.includes('qwen')) {
-    return '#8b5cf6';  // qwen - purple
-  }
-
-  // Fallback for unknown models
-  return '#6b7280';  // gray
-};
-
 export default function RecentInvocations({ data }: Props) {
   const [expandedSections, setExpandedSections] = useState<Record<string, Record<string, boolean>>>({});
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-[400px] text-gray-500 font-medium animate-pulse">
+      <div className="flex items-center justify-center h-[400px] text-gray-500 dark:text-gray-400 font-medium animate-pulse">
         Loading recent invocations...
       </div>
     );
@@ -84,7 +69,7 @@ export default function RecentInvocations({ data }: Props) {
                         >
                           {it.modelName}
                         </span>
-                        <span className="text-[9px] text-gray-500">
+                        <span className="text-[9px] text-gray-500 dark:text-gray-400">
                           {it.createdAt.toLocaleString('en-US', {
                             month: '2-digit',
                             day: '2-digit',
@@ -99,10 +84,10 @@ export default function RecentInvocations({ data }: Props) {
                         className="relative rounded p-3 border"
                         style={{
                           borderColor: modelColor,
-                          backgroundColor: `${modelColor}0D` // 5% opacity
+                          backgroundColor: `${modelColor}0D`
                         }}
                       >
-                        <div className="text-xs leading-relaxed text-black line-clamp-3">
+                        <div className="text-xs leading-relaxed text-black dark:text-gray-100 line-clamp-3">
                           {it.response
                             ? it.response
                             : it.toolCalls && it.toolCalls.length > 0
@@ -120,8 +105,7 @@ export default function RecentInvocations({ data }: Props) {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 transition-all">
-                    {/* Tool Calls Section */}
+                  <div className="mt-3 space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3 transition-all">
                     {it.toolCalls && it.toolCalls.length > 0 && (
                       <div>
                         <button
@@ -132,12 +116,12 @@ export default function RecentInvocations({ data }: Props) {
                           }}
                         >
                           <span
-                            className={`transform text-gray-600 transition-transform ${expandedSections[it.id]?.toolCalls ? 'rotate-90' : ''
+                            className={`transform text-gray-600 dark:text-gray-300 transition-transform ${expandedSections[it.id]?.toolCalls ? 'rotate-90' : ''
                               }`}
                           >
                             ▶
                           </span>
-                          <span className="font-mono text-sm text-gray-600">
+                          <span className="font-mono text-sm text-gray-600 dark:text-gray-300">
                             TOOL CALLS ({it.toolCalls.length})
                           </span>
                         </button>
@@ -145,12 +129,12 @@ export default function RecentInvocations({ data }: Props) {
                         {expandedSections[it.id]?.toolCalls && (
                           <div className="ml-4 space-y-2">
                             {it.toolCalls.map((tc, idx) => (
-                              <div key={idx} className="rounded border border-gray-200 p-3">
+                              <div key={idx} className="rounded border border-gray-200 dark:border-gray-700 p-3">
                                 <div className="flex justify-between mb-2">
-                                  <span className="font-mono text-xs font-semibold text-gray-700">
+                                  <span className="font-mono text-xs font-semibold text-gray-700 dark:text-gray-200">
                                     {tc.type}
                                   </span>
-                                  <span className="text-[9px] text-gray-500">
+                                  <span className="text-[9px] text-gray-500 dark:text-gray-400">
                                     {tc.createdAt.toLocaleString('en-US', {
                                       month: '2-digit',
                                       day: '2-digit',
@@ -162,12 +146,12 @@ export default function RecentInvocations({ data }: Props) {
                                   </span>
                                 </div>
                                 {tc.metadata && (
-                                  <pre className="text-[11px] text-gray-700 font-mono whitespace-pre-wrap leading-relaxed">
+                                  <pre className="text-[11px] text-gray-700 dark:text-gray-200 font-mono whitespace-pre-wrap leading-relaxed">
                                   {(() => {
                                     try {
                                       const parsed = JSON.parse(tc.metadata);
                                       return (
-                                        <div className="text-[11px] text-gray-700 font-mono">
+                                        <div className="text-[11px] text-gray-700 dark:text-gray-200 font-mono">
                                           {Object.entries(parsed).map(([k, v]) => (
                                             <div key={k} className="flex">
                                               <span className="w-20 font-semibold">{k.charAt(0).toUpperCase() + k.slice(1)}:</span>
@@ -177,7 +161,7 @@ export default function RecentInvocations({ data }: Props) {
                                         </div>
                                       );
                                     } catch {
-                                      return <pre className="text-[11px] text-gray-700 font-mono whitespace-pre-wrap leading-relaxed">{tc.metadata}</pre>;
+                                      return <pre className="text-[11px] text-gray-700 dark:text-gray-200 font-mono whitespace-pre-wrap leading-relaxed">{tc.metadata}</pre>;
                                     }
                                   })()}
                                   </pre>
@@ -189,7 +173,6 @@ export default function RecentInvocations({ data }: Props) {
                       </div>
                     )}
 
-                    {/* Response Section */}
                     {it.response && it.response != "" && (
                     <div>
                       <button
@@ -200,18 +183,18 @@ export default function RecentInvocations({ data }: Props) {
                         }}
                       >
                         <span
-                          className={`transform text-gray-600 transition-transform ${expandedSections[it.id]?.response ? 'rotate-90' : ''
+                          className={`transform text-gray-600 dark:text-gray-300 transition-transform ${expandedSections[it.id]?.response ? 'rotate-90' : ''
                             }`}
                         >
                           ▶
                         </span>
-                        <span className="font-mono text-sm text-gray-600">RESPONSE</span>
+                        <span className="font-mono text-sm text-gray-600 dark:text-gray-300">RESPONSE</span>
                       </button>
 
                       {expandedSections[it.id]?.response && (
                         <div className="ml-4">
-                          <div className="rounded border border-gray-200 p-3">
-                            <pre className="text-xs text-black font-mono whitespace-pre-wrap leading-relaxed">
+                          <div className="rounded border border-gray-200 dark:border-gray-700 p-3">
+                            <pre className="text-xs text-black dark:text-gray-100 font-mono whitespace-pre-wrap leading-relaxed">
                               {it.response}
                             </pre>
                           </div>

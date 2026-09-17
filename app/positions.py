@@ -5,29 +5,28 @@ from typing import Any
 import httpx
 import lighter
 
-from app.accounts import Account
-from app.config import BASE_URL
+from app.config import LIGHTER_MAINNET_BASE_URL
 from app.lighter_client import close_client, create_api_client, create_signer_client
 from app.markets import MARKETS
 
 logger = logging.getLogger(__name__)
 
 
-async def get_portfolio(account: Account) -> dict[str, str]:
-    url = f"{BASE_URL}/api/v1/account"
-    params = {"by": "index", "value": account.account_index}
+async def get_portfolio(*, base_url: str, account_index: str) -> dict[str, str]:
+    url = f"{base_url}/api/v1/account"
+    params = {"by": "index", "value": account_index}
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             payload = response.json()
     except Exception:
-        logger.exception("Failed to fetch portfolio for account_index=%s", account.account_index)
+        logger.exception("Failed to fetch portfolio for account_index=%s", account_index)
         raise
 
     accounts = payload.get("accounts") or []
     if not accounts:
-        raise ValueError(f"No account found for index {account.account_index}")
+        raise ValueError(f"No account found for index {account_index}")
     first_account = accounts[0]
     return {
         "total": first_account.get("collateral"),
@@ -35,9 +34,8 @@ async def get_portfolio(account: Account) -> dict[str, str]:
     }
 
 
-async def get_open_positions(api_key: str, account_index: str) -> list[dict[str, Any]]:
-    del api_key  # AccountApi.account is a public read; key is unused like the REST path.
-    api_client = create_api_client()
+async def get_open_positions(*, base_url: str, account_index: str) -> list[dict[str, Any]]:
+    api_client = create_api_client(base_url)
     try:
         account_api = lighter.AccountApi(api_client)
         response = await account_api.account("index", account_index)
@@ -70,8 +68,8 @@ async def get_open_positions(api_key: str, account_index: str) -> list[dict[str,
         await close_client(api_client)
 
 
-async def _latest_close_price(market_id: int) -> float:
-    api_client = create_api_client()
+async def get_latest_close_price(market_id: int) -> float:
+    api_client = create_api_client(LIGHTER_MAINNET_BASE_URL)
     try:
         candlestick_api = lighter.CandlestickApi(api_client)
         end_timestamp = int(time.time() * 1000)
@@ -99,28 +97,37 @@ async def _latest_close_price(market_id: int) -> float:
         await close_client(api_client)
 
 
-async def create_position(account: Account, symbol: str, side: str, quantity: float) -> None:
+async def create_position(
+    *,
+    base_url: str,
+    api_key: str,
+    account_index: str,
+    symbol: str,
+    side: str,
+    quantity: float,
+) -> None:
     if symbol not in MARKETS:
         raise ValueError(f"Unknown market symbol: {symbol}")
 
     market = MARKETS[symbol]
-    latest_price = await _latest_close_price(market["marketId"])
+    latest_price = await get_latest_close_price(market["marketId"])
     worst_price = latest_price * 1.01 if side == "LONG" else latest_price * 0.99
     base_amount = int(round(quantity * market["qtyDecimals"]))
     price = int(round(worst_price * market["priceDecimals"]))
     is_ask = side != "LONG"
 
     logger.info(
-        "Creating %s position symbol=%s quantity=%s base_amount=%s price=%s account_index=%s",
+        "Creating %s position symbol=%s quantity=%s base_amount=%s price=%s account_index=%s base_url=%s",
         side,
         symbol,
         quantity,
         base_amount,
         price,
-        account.account_index,
+        account_index,
+        base_url,
     )
 
-    client = create_signer_client(account)
+    client = create_signer_client(base_url=base_url, account_index=account_index, api_key=api_key)
     try:
         _tx, api_response, error = await client.create_order(
             market_index=market["marketId"],
@@ -144,9 +151,9 @@ async def create_position(account: Account, symbol: str, side: str, quantity: fl
         await close_client(client)
 
 
-async def cancel_all_orders(account: Account) -> None:
-    open_positions = await get_open_positions(account.api_key, account.account_index)
-    client = create_signer_client(account)
+async def cancel_all_orders(*, base_url: str, api_key: str, account_index: str) -> None:
+    open_positions = await get_open_positions(base_url=base_url, account_index=account_index)
+    client = create_signer_client(base_url=base_url, account_index=account_index, api_key=api_key)
     try:
         for open_position in open_positions:
             position_size = float(open_position["position"])
@@ -157,8 +164,7 @@ async def cancel_all_orders(account: Account) -> None:
                 logger.warning("Skipping close for unknown symbol=%s", symbol)
                 continue
             market = MARKETS[symbol]
-            latest_price = await _latest_close_price(market["marketId"])
-            # Close by placing the opposite side of the live position.
+            latest_price = await get_latest_close_price(market["marketId"])
             close_side = "SHORT" if open_position["sign"] == "LONG" else "LONG"
             worst_price = latest_price * 1.01 if close_side == "LONG" else latest_price * 0.99
             base_amount = int(round(abs(position_size) * market["qtyDecimals"]))
@@ -187,7 +193,7 @@ async def cancel_all_orders(account: Account) -> None:
                 raise RuntimeError(f"Failed to close position for {symbol}: {error}")
             logger.info("close order response=%s", api_response)
     except Exception:
-        logger.exception("cancel_all_orders failed account_index=%s", account.account_index)
+        logger.exception("cancel_all_orders failed account_index=%s", account_index)
         raise
     finally:
         await close_client(client)

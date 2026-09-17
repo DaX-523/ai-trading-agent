@@ -4,6 +4,7 @@ from typing import Literal
 
 import lighter
 
+from app.config import LIGHTER_MAINNET_BASE_URL
 from app.indicators import get_ema, get_macd, get_mid_prices
 from app.lighter_client import close_client, create_api_client
 from app.utils import round_to_3
@@ -18,7 +19,7 @@ async def get_indicators(duration: Duration, market_id: int) -> dict[str, list[f
     end_timestamp = int(time.time() * 1000)
     start_timestamp = end_timestamp - 1000 * 60 * 60 * lookback_hours
 
-    api_client = create_api_client()
+    api_client = create_api_client(LIGHTER_MAINNET_BASE_URL)
     try:
         candlestick_api = lighter.CandlestickApi(api_client)
         # Candlestick timestamps are milliseconds.

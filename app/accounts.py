@@ -9,3 +9,5 @@ class Account:
     invocation_count: int
     id: str
     account_index: str
+    testnet_api_key: str | None = None
+    testnet_account_index: str | None = None

@@ -7,11 +7,11 @@ from sqlalchemy import select
 from app.accounts import Account
 from app.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from app.db import SessionLocal
-from app.db_models import Invocations, Models, ToolCalls, ToolCallType
+from app.db_models import Invocations, Models, ToolCalls, ToolCallType, TradingMode
 from app.markets import MARKET_SYMBOLS, MARKETS
-from app.positions import cancel_all_orders, create_position, get_open_positions, get_portfolio
 from app.prompt import PROMPT
 from app.stock_data import get_indicators
+from app.trading_backend import get_trading_backend
 
 logger = logging.getLogger(__name__)
 
@@ -93,14 +93,15 @@ def _flip_side(side: str) -> str:
     return "SHORT" if side == "LONG" else "LONG"
 
 
-async def invoke_agent(account: Account) -> str:
-    logger.info("Invoking agent for model=%s id=%s", account.name, account.id)
+async def invoke_agent(account: Account, mode: TradingMode) -> str:
+    logger.info("Invoking agent for model=%s id=%s mode=%s", account.name, account.id, mode.value)
+    backend = get_trading_backend(mode)
     all_indicator_data = await _build_indicator_block()
-    portfolio = await get_portfolio(account)
-    open_positions = await get_open_positions(account.api_key, account.account_index)
+    portfolio = await backend.get_portfolio(account)
+    open_positions = await backend.get_open_positions(account)
 
     with SessionLocal() as session:
-        model_invocation = Invocations(modelId=account.id, response="")
+        model_invocation = Invocations(modelId=account.id, response="", tradingMode=mode)
         session.add(model_invocation)
         session.commit()
         session.refresh(model_invocation)
@@ -135,7 +136,7 @@ async def invoke_agent(account: Account) -> str:
         logger.info("Tool call name=%s arguments=%s", function_name, arguments)
         if function_name == "createPosition":
             flipped_side = _flip_side(arguments["side"])
-            await create_position(
+            await backend.create_position(
                 account,
                 arguments["symbol"],
                 flipped_side,
@@ -157,7 +158,7 @@ async def invoke_agent(account: Account) -> str:
                 )
                 session.commit()
         elif function_name == "closeAllPosition":
-            await cancel_all_orders(account)
+            await backend.cancel_all_orders(account)
             with SessionLocal() as session:
                 session.add(
                     ToolCalls(
